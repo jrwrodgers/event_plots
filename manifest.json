@@ -1,0 +1,10 @@
+{
+    "domain": "event_plots",
+    "name": "Event Plots",
+    "codeowners": ["@i-am-grub"],
+    "description": "Event results generated with Plotly",
+    "documentation": "https://github.com/i-am-grub",
+    "required_rhapi_version": "1.2",
+    "version": "0.1.0",
+    "dependencies" : ["plotly==6.0.0"]
+}
