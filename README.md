@@ -8,12 +8,12 @@ Log in via SSH and then execute the following commands : (NB check for official 
 
 ```
 cd ~
-wget https://github.com/jrwrodgers/rh_rplots/archive/refs/heads/main.zip
+wget https://github.com/jrwrodgers/event_plots/archive/refs/heads/main.zip
 unzip ./main.zip
-cp -r ~/rh_rplots-main ~/RotorHazard/src/server/plugins/rh_rplots
-rm -R ~/rh_rplots-main
+cp -r ~/event_plots-main ~/RotorHazard/src/server/plugins/event_plots
+rm -R ~/event_plots-main
 rm ./main.zip
-pip install -r ./RotorHazard/src/server/plugins/rh_rplots/requirements.txt
+pip install -r ./RotorHazard/src/server/plugins/event_plots/requirements.txt
 sudo systemctl restart rotorhazard.service
 ```
 
