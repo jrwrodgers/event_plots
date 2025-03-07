@@ -1,4 +1,4 @@
-# RotorHazardEvent Plots
+# Event Plots Plugin for RotorHazard
 This plugin to produces a statistical plot of the race event lap times per pilot
 
  
