@@ -22,7 +22,7 @@ results_df = pd.DataFrame(columns=["Pilot id",
 # table_df (dataframe) = table in order of fastest 3 consecutive, plus derived data used to calculate order
 table_df = pd.DataFrame(columns=["Pilot id",
                                     "Best 3 Consecutive Lap Time",
-                                    "Best 3 Consecutive Round",
+                                    "Best 3 Consecutive Lap Round",
                                     "Best 3 Consecutive Lap",
                                     "Best 3 Consecutive nLaps"])
 # pilot_df (dataframe) = pilots: callsigns, ids and colour
@@ -48,23 +48,26 @@ def update_event_data(args: dict) -> None:
 
     if len(rhapi.db.races)> 0:
         raceclass = rhapi.db.raceclasses
-
         raceclass_results = rhapi.db.raceclass_results(raceclass[0])
-
-
-
+        #reset table_df
+        table_df.drop(table_df.index, inplace=True)
+        pilot_df.drop(pilot_df.index, inplace=True)
+        #logger.info(raceclass_results)
         if raceclass_results is not None:
-            # This dataframe is redundant as all these calls to get data from the db could be done on the fly.
-            # Future development to remove this dataframe and reduce overhead
-            table_df["Pilot id"] = [int(i['pilot_id']) for i in raceclass_results['by_consecutives']]
-            table_df["Best 3 Consecutive Lap Time"] = [i['consecutives'] for i in raceclass_results['by_consecutives']]
-            table_df["Best 3 Consecutive Lap Round"] = [i['consecutives_source']['heat'] for i in raceclass_results['by_consecutives']]
-            table_df["Best 3 Consecutive Lap"] = [i['consecutive_lap_start'] for i in raceclass_results['by_consecutives']]
-            table_df["Best 3 Consecutive nLaps"] = [i['consecutives_base'] for i in raceclass_results['by_consecutives']]
-            #logger.info(f"{table_df.head(3)}")
+            for pilot in raceclass_results['by_consecutives']:
+                if pilot['laps'] > 0:
+                    table_df.loc[len(table_df)] = [int(pilot['pilot_id']),pilot['consecutives'],
+                                                    int(pilot['consecutives_source']['round']),
+                                                    pilot['consecutive_lap_start'],
+                                                    pilot['consecutives_base']]
+                if pilot['laps'] == 0:
+                    table_df.loc[len(table_df)] = [int(pilot['pilot_id']),0,0,0,0]
 
-            # popoulate pilot_df from rhapi.db.pilots, this could be done on the fly
-            # so look to remove this intermediate repeated data in future version
+            pd.set_option('display.max_columns', None)
+            pd.set_option('display.max_rows', None)
+            #logger.info(f"{table_df}")
+
+            # populate pilot_df from rhapi.db.pilots, this could be done on the fly
             pilots = rhapi.db.pilots
             pilot_ids = []
             pilot_names = []
@@ -90,30 +93,34 @@ def update_event_data(args: dict) -> None:
 
             # Loop through the race ids for each pilot and populate table_df
             # This dataframe allows efficient plotting of fastest laps, holeshots and during the graph object calling
+            results_df.drop(results_df.index, inplace=True)
+            #logger.info(f"{pilot_list}")
             for i in range(len(pilot_list)):
                 for j, jj in enumerate(pilot_list[i]):
                     laps = rhapi.db.laps_by_pilotrun(pilot_list[i][j])
-                    heats = [lap.race_id for lap in laps]
-                    this_pilot = laps[0].pilot_id
-                    temp_laps = [lap.lap_time_formatted for lap in laps if lap.deleted == 0]
-                    for k in range(len(temp_laps)):
-                        time_in_seconds = (float(temp_laps[k].split(":")[0] * 60) +
-                                           float(temp_laps[k].split(":")[1]))
-                        # If this is fastest round and one of the 3 fastest consecutive then set qlap to 1. Boolean might be better future update
-                        if heats[0] == table_df["Best 3 Consecutive Lap Round"][i]:
-                            if (k >= table_df["Best 3 Consecutive Lap"][i] and
-                                    k <  (table_df["Best 3 Consecutive Lap"][i]+table_df["Best 3 Consecutive nLaps"][i])) :
-                                qlap = int(1)
+                    if laps:
+                        this_pilot = laps[0].pilot_id
+                        temp_laps = [lap.lap_time_formatted for lap in laps if lap.deleted == 0]
+                        for k in range(len(temp_laps)):
+                            time_in_seconds = (float(temp_laps[k].split(":")[0] * 60) +
+                                               float(temp_laps[k].split(":")[1]))
+                            # If this is fastest round and one of the 3 fastest consecutive then set qlap to 1. Boolean might be better future update
+                            if j == table_df[table_df["Pilot id"]==this_pilot]["Best 3 Consecutive Lap Round"].item() -1:
+                                #logger.info(f" ==={this_pilot},{k},{table_df[table_df["Pilot id"]==this_pilot]["Best 3 Consecutive Lap"].item()},{table_df[table_df["Pilot id"]==this_pilot]["Best 3 Consecutive Lap"].item()+table_df[table_df["Pilot id"]==this_pilot]["Best 3 Consecutive nLaps"].item()}")
+                                if (k >= table_df[table_df["Pilot id"]==this_pilot]["Best 3 Consecutive Lap"].item() and
+                                        k <  (table_df[table_df["Pilot id"]==this_pilot]["Best 3 Consecutive Lap"].item()+table_df[table_df["Pilot id"]==this_pilot]["Best 3 Consecutive nLaps"].item())) :
+                                    qlap = int(1)
+                                    #logger.info("qlap==1")
+                                else:
+                                    qlap = int(0)
                             else:
                                 qlap = int(0)
-                        else:
-                            qlap = int(0)
-                        results_df.loc[len(results_df)] = {"Pilot id": int(this_pilot),
-                                                           "Pilot Name": pilot_names[pilot_ids.index(this_pilot)],
-                                                           "Lap Time": time_in_seconds,
-                                                           "Round": int(j) + 1,
-                                                           "Lap": int(k),
-                                                           "Best Q": qlap}
+                            results_df.loc[len(results_df)] = {"Pilot id": int(this_pilot),
+                                                               "Pilot Name": pilot_names[pilot_ids.index(this_pilot)],
+                                                               "Lap Time": time_in_seconds,
+                                                               "Round": int(j) + 1,
+                                                               "Lap": int(k),
+                                                               "Best Q": qlap}
             #logger.info(results_df)
         else:
             # no race/lap time data
@@ -132,8 +139,8 @@ def update_event_plot(rhapi) -> str:
 
         # get min and max rounds - idea was to use this as a variable to filter with slider. Not trivial with plotly,
         # requires javascript functions to update the source. Possible future development
-        min_round = min(results_df["Round"])
-        max_round = max(results_df["Round"])
+        #min_round = min(results_df["Round"])
+        #max_round = max(results_df["Round"])
         #logger.info(f"Min/Max rounds = {min_round},{max_round}")
 
         # Plot box, raw data, fastest 3, holeshots for each pilot in the results order.. slowest first
@@ -220,7 +227,7 @@ def update_event_plot(rhapi) -> str:
             custom_ytics.append(this_pilot)
             custom_ylabel.append(f"{this_pilot}<br>"
                                  f"{table_df.loc[table_df["Pilot id"] == pilot_id,'Best 3 Consecutive nLaps'].values[0]}/ "
-                                  f"{table_df.loc[table_df["Pilot id"] == pilot_id,'Best 3 Consecutive Lap Time'].values[0]}")
+                                 f"{table_df.loc[table_df["Pilot id"] == pilot_id,'Best 3 Consecutive Lap Time'].values[0]}")
 
         # Set theme and other visual options
         # the itemclick option allows legendgroups to be hidden when clicked
