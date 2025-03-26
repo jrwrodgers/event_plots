@@ -10,8 +10,9 @@ Log in via SSH and then execute the following commands : (NB check for official 
 cd ~
 wget https://github.com/jrwrodgers/event_plots/archive/refs/heads/main.zip
 unzip ./main.zip
+rm -r ~/RotorHazard/src/server/plugins/event_plots
 cp -r ~/event_plots-main ~/RotorHazard/src/server/plugins/event_plots
-rm -R ~/event_plots-main
+rm -r ~/event_plots-main
 rm ./main.zip
 pip install -r ./RotorHazard/src/server/plugins/event_plots/requirements.txt
 sudo systemctl restart rotorhazard.service
