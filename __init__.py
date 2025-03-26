@@ -2,13 +2,13 @@ from typing import Union
 import logging
 
 from flask import Blueprint
-import plotly.graph_objects as graph_objects
 
 from RHAPI import RHAPI
 from Database import Pilot, SavedRaceLap
 from eventmanager import Evt
 
 import pandas as pd
+import plotly.graph_objects as graph_objects
 
 PLOTLY_JS = "/event_plots/static/plotly-3.0.0.min.js"
 # results_df (dataframe)= table of each lap time recorded and associated pilot, round,
@@ -27,14 +27,15 @@ table_df = pd.DataFrame(columns=["Pilot id",
                                     "Best 3 Consecutive nLaps"])
 # pilot_df (dataframe) = pilots: callsigns, ids and colour
 pilot_df = pd.DataFrame(columns=["Pilot id",
-                                                "Pilot Name",
-                                                "Colour"])
+                                 "Pilot Name",
+                                 "Colour"])
+
+DEBUG=False
+yaxis_max=60
+axes_font_size=12
 event_name=""
 logger = logging.getLogger(__name__)
 
-
-def init_plugin(args: dict) -> None:
-    logger.info("Event Plot Plugin initialised")
 
 def update_event_data(args: dict) -> None:
 
@@ -52,20 +53,25 @@ def update_event_data(args: dict) -> None:
         #reset table_df
         table_df.drop(table_df.index, inplace=True)
         pilot_df.drop(pilot_df.index, inplace=True)
-        #logger.info(raceclass_results)
+        if DEBUG:
+          logger.info(raceclass_results)
         if raceclass_results is not None:
             for pilot in raceclass_results['by_consecutives']:
                 if pilot['laps'] > 0:
+                    # this is a workaround because ['heat'] was 0 in the DB but the displayname was correct
+                    round=int(str(pilot['consecutives_source']['displayname']).split("/")[0].split(" ")[1])
                     table_df.loc[len(table_df)] = [int(pilot['pilot_id']),pilot['consecutives'],
-                                                    int(pilot['consecutives_source']['round']),
+                                                    round,
                                                     pilot['consecutive_lap_start'],
                                                     pilot['consecutives_base']]
                 if pilot['laps'] == 0:
                     table_df.loc[len(table_df)] = [int(pilot['pilot_id']),0,0,0,0]
 
-            pd.set_option('display.max_columns', None)
-            pd.set_option('display.max_rows', None)
-            #logger.info(f"{table_df}")
+            if DEBUG:
+                pd.set_option('display.max_columns', None)
+                pd.set_option('display.max_rows', None)
+                logger.info(f"{table_df}")
+
 
             # populate pilot_df from rhapi.db.pilots, this could be done on the fly
             pilots = rhapi.db.pilots
@@ -80,6 +86,9 @@ def update_event_data(args: dict) -> None:
                 pilot_df["Pilot id"] = pilot_ids
                 pilot_df["Pilot Name"] = pilot_names
                 pilot_df["Colour"] = pilot_colours
+
+            if DEBUG:
+              logger.info(f"{pilot_df}")
 
             races = rhapi.db.pilotruns
 
@@ -102,7 +111,7 @@ def update_event_data(args: dict) -> None:
                         this_pilot = laps[0].pilot_id
                         temp_laps = [lap.lap_time_formatted for lap in laps if lap.deleted == 0]
                         for k in range(len(temp_laps)):
-                            time_in_seconds = (float(temp_laps[k].split(":")[0] * 60) +
+                            time_in_seconds = ((float(temp_laps[k].split(":")[0]) * 60) +
                                                float(temp_laps[k].split(":")[1]))
                             # If this is fastest round and one of the 3 fastest consecutive then set qlap to 1. Boolean might be better future update
                             if j == table_df[table_df["Pilot id"]==this_pilot]["Best 3 Consecutive Lap Round"].item() -1:
@@ -121,7 +130,8 @@ def update_event_data(args: dict) -> None:
                                                                "Round": int(j) + 1,
                                                                "Lap": int(k),
                                                                "Best Q": qlap}
-            #logger.info(results_df)
+            if DEBUG:
+                logger.info(results_df)
         else:
             # no race/lap time data
             logger.info("No raceclass results found")
@@ -225,9 +235,7 @@ def update_event_plot(rhapi) -> str:
         for pilot_id in reversed(list(table_df["Pilot id"])):
             this_pilot = pilot_df.loc[pilot_df["Pilot id"] == pilot_id, ["Pilot Name"]].values[0][0]
             custom_ytics.append(this_pilot)
-            custom_ylabel.append(f"{this_pilot}<br>"
-                                 f"{table_df.loc[table_df["Pilot id"] == pilot_id,'Best 3 Consecutive nLaps'].values[0]}/ "
-                                 f"{table_df.loc[table_df["Pilot id"] == pilot_id,'Best 3 Consecutive Lap Time'].values[0]}")
+            custom_ylabel.append(f"{this_pilot}<br>{table_df.loc[table_df['Pilot id'] == pilot_id,'Best 3 Consecutive nLaps'].values[0]}/ {table_df.loc[table_df['Pilot id'] == pilot_id,'Best 3 Consecutive Lap Time'].values[0]}")
 
         # Set theme and other visual options
         # the itemclick option allows legendgroups to be hidden when clicked
@@ -253,6 +261,10 @@ def update_event_plot(rhapi) -> str:
         logger.info("No data to plot")
         return "No data to plot"
 
+def init_plugin(args: dict) -> None:
+    logger.info("Event Plot Plugin initialised")
+
+
 
 def initialize(rhapi: RHAPI) -> None:
     # Event Startup creates the dataframes
@@ -269,7 +281,6 @@ def initialize(rhapi: RHAPI) -> None:
                                   "Manual Plot Update", update_event_data, {"rhapi":rhapi})
     # Link to the page
     rhapi.ui.register_markdown("Event Results Plot", "Results Plot", "Plot available [here](/event_result)")
-
 
     bp = Blueprint(
             "event_plot",
