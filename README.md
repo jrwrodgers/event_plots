@@ -3,9 +3,10 @@ This plugin to produces a statistical plot of the race event lap times per pilot
 
  
  ### Install
+** v0.2 Soon to be available as a custom-plugin through the RotorHazard Plugin Manager **
+For now use Release v0.1 !!!!! 
+Log in via SSH and then execute the following commands : 
 
-Log in via SSH and then execute the following commands : (NB check for official release or master branch)
-** Soon to be available as a custom-plugin through the RotorHazard Plugin Manager **
 
 ```
 cd ~
