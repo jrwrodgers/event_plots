@@ -140,7 +140,7 @@ def update_event_data(args: dict) -> None:
 
 
 
-def update_event_plot(rhapi) -> str:
+def update_event_plot(rhapi:RHAPI) -> str:
     logger.info("Plotting events results")
     event_name: str = rhapi.db.option("eventName")
     if len(rhapi.db.races)> 0 or len(results_df) > 0:
@@ -256,31 +256,52 @@ def update_event_plot(rhapi) -> str:
             itemdoubleclick="toggleothers"  # Double-click to isolate a trace
         )
         )
+
+        rhapi.ui.register_markdown(
+            "event_results_plot",
+            "Current Results",
+            fig.to_html(include_plotlyjs=PLOTLY_JS, full_html=False),
+        )
+
         return fig.to_html(include_plotlyjs=PLOTLY_JS)
     else:
         logger.info("No data to plot")
         return "No data to plot"
 
+
+def update_results(args: dict) -> None:
+    rhapi: Union[RHAPI, None] = args.get("rhapi", None)
+    if rhapi is not None:
+        update_event_data({"rhapi": rhapi})
+        update_event_plot(rhapi)
+
+
 def init_plugin(args: dict) -> None:
     logger.info("Event Plot Plugin initialised")
 
 
-
 def initialize(rhapi: RHAPI) -> None:
     # Event Startup creates the dataframes
-    rhapi.events.on(Evt.STARTUP,init_plugin,default_args={"rhapi": rhapi})
+    rhapi.events.on(Evt.STARTUP, init_plugin, default_args={"rhapi": rhapi})
     # Event Startup populates the dataframes if restoring aa db
-    rhapi.events.on(Evt.STARTUP, update_event_data, default_args={"rhapi": rhapi})
+    rhapi.events.on(Evt.STARTUP, update_results, default_args={"rhapi": rhapi})
     # Event Laps_save and Laps_resave tp update the dataframes with latest results
-    rhapi.events.on(Evt.LAPS_SAVE, update_event_data, default_args={"rhapi": rhapi})
-    rhapi.events.on(Evt.LAPS_RESAVE, update_event_data, default_args={"rhapi": rhapi})
+    rhapi.events.on(Evt.LAPS_SAVE, update_results, default_args={"rhapi": rhapi})
+    rhapi.events.on(Evt.LAPS_RESAVE, update_results, default_args={"rhapi": rhapi})
 
     # Manual results update plot button
-    rhapi.ui.register_panel("Event Results Plot", "Event Results Plot", "format")
-    rhapi.ui.register_quickbutton("Event Results Plot", "plot_data_update",
-                                  "Manual Plot Update", update_event_data, {"rhapi":rhapi})
+    rhapi.ui.register_panel("event_results_plot", "Event Results Plot", "results")
+    rhapi.ui.register_quickbutton(
+        "event_results_plot",
+        "plot_data_update",
+        "Manual Plot Update",
+        update_results,
+        {"rhapi": rhapi},
+    )
     # Link to the page
-    rhapi.ui.register_markdown("Event Results Plot", "Results Plot", "Plot available [here](/event_result)")
+    rhapi.ui.register_markdown(
+        "event_results_plot", "Results Plot", "Plot available [here](/event_result)"
+    )
 
     bp = Blueprint(
             "event_plot",
