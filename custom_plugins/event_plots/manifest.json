@@ -7,5 +7,5 @@
     "required_rhapi_version": "1.2",
     "version": "0.2.0",
     "dependencies" : ["plotly==6.0.0","pandas==2.2.3"],
-     "category": ["Utilities"]
+    "category": ["Utilities"]
 }
