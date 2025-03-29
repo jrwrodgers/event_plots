@@ -5,10 +5,11 @@ This plugin to produces a statistical plot of the race event lap times per pilot
  ### Install
 
 Log in via SSH and then execute the following commands : (NB check for official release or master branch)
+** Soon to be available as a custom-plugin through the RotorHazard Plugin Manager **
 
 ```
 cd ~
-wget https://github.com/jrwrodgers/event_plots/archive/refs/heads/main.zip
+wget https://github.com/jrwrodgers/event_plots/archive/refs/tags/v0.1.zip
 unzip ./main.zip
 rm -r ~/RotorHazard/src/server/plugins/event_plots
 cp -r ~/event_plots-main ~/RotorHazard/src/server/plugins/event_plots
