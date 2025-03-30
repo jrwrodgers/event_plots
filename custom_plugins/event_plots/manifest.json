@@ -1,9 +1,10 @@
 {
     "domain": "event_plots",
     "name": "Event Plots",
-    "codeowners": ["@jrwrodgers"],
+    "author": "JRo",
+    "author_uri": "https://github.com/jrwrodgers",
     "description": "Event lap time plot generated with Plotly",
-    "documentation": "https://github.com/jrwrodgers",
+    "documentation_uri": "https://github.com/jrwrodgers/event_plots",
     "required_rhapi_version": "1.2",
     "version": "0.2.0",
     "dependencies" : ["plotly==6.0.0","pandas==2.2.3"],
