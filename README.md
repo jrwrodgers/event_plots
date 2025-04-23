@@ -2,9 +2,16 @@
 This plugin to produces a statistical plot of the race event lap times per pilot
 
  
- ### Install
-Install from Settings -> Plugins -> Browse Community Plugins -> Utilities -> Event Plots : Install
+### Install
+Install from RH Settings -> Plugins -> Browse Community Plugins -> Utilities -> Event Plots : Install
 
+### Setup
+Please ensure that under "Classes And Types" in the RH settings, the round type is set to "Count races per heat"
+
+![image](https://github.com/jrwrodgers/event_plots/blob/main/assets/Round_type.png)
+
+
+### Results
 On the Results page in RotorHazard you will see new sections
 
 ![image](https://github.com/jrwrodgers/event_plots/blob/main/assets/Panels.png)
