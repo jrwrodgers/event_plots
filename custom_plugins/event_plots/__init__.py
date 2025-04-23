@@ -32,7 +32,7 @@ pilot_df = pd.DataFrame(columns=["Pilot id",
                                  "Pilot Name",
                                  "Colour"])
 
-DEBUG=True
+DEBUG=False
 yaxis_max=60
 axes_font_size=12
 event_name=""
@@ -128,7 +128,7 @@ def update_event_data(args: dict) -> None:
                                     if (k >= table_df[table_df["Pilot id"]==this_pilot]["Best 3 Consecutive Lap"].item() and
                                             k <  (table_df[table_df["Pilot id"]==this_pilot]["Best 3 Consecutive Lap"].item()+table_df[table_df["Pilot id"]==this_pilot]["Best 3 Consecutive nLaps"].item())) :
                                         qlap = int(1)
-                                        logger.info("qlap==1")
+                                        #logger.info("qlap==1")
                                 else:
                                     qlap = int(0)
                             else:
@@ -251,7 +251,7 @@ def update_event_plot(rhapi:RHAPI) -> str:
         # the itemclick option allows legendgroups to be hidden when clicked
         fig.update_layout(
             template="plotly_dark",  # Dark mode
-            height=1200,
+            height=int(pilot_df.shape[0]*150),
             xaxis=dict(
                 tickmode="linear",  # Ensures regular intervals
                 dtick=2,  # Interval of 2
@@ -285,110 +285,130 @@ def update_event_plot(rhapi:RHAPI) -> str:
         return "No data to plot"
 
 def update_race_plots(rhapi) -> str:
+
     logger.info(f"Plotting Races")
-    event_name: str = rhapi.db.option("eventName")
-    #Get the name of the heats
-    heats=list(set(results_df["Heat"]))
-    rounds=[]
-    for h in heats:
-        rounds.append(list(set(results_df[results_df["Heat"]==h]["Round"])))
-    nplots = sum(sum(inner_list) for inner_list in rounds)
+    if len(rhapi.db.races) > 0 or len(results_df) > 0:
+        event_name: str = rhapi.db.option("eventName")
+        #Get the name of the heats
+        heats=list(set(results_df["Heat"]))
+        rounds=[]
+        for h in heats:
+            rounds.append(list(set(results_df[results_df["Heat"]==h]["Round"])))
+        nplots = sum(sum(inner_list) for inner_list in rounds)
 
-    subtitles=[]
-    if DEBUG:
-        logger.info(heats)
-        logger.info(rounds)
-        logger.info(f"Total plots ={nplots}")
-    for i,h in enumerate(heats):
-        for r in rounds[i]:
-           subtitles.append([f"Heat {h} - R{r} Lap Times",f" Heat {h} - R{r} Delta Lap Times"])
-    logger.info(subtitles)
+        subtitles=[]
+        if DEBUG:
+            logger.info(heats)
+            logger.info(rounds)
+            logger.info(f"Total plots ={nplots}")
 
-    fig = (make_subplots(rows=nplots, cols=2))
-    this_row=0
-    for hh,h in enumerate(heats):
-        for rr,r in enumerate(rounds[hh]):
-            this_row+=1
-            laps = results_df.loc[(results_df["Heat"] == h) & (results_df["Round"] == r) ]
-            pilots_this_heat=list(set(laps["Pilot id"]))
-            yd = []
-            pilot_legend = []
-            pilot_legend_colours = []
-            for p in pilots_this_heat:
-                this_pilot_name = pilot_df.loc[pilot_df["Pilot id"] == p, ["Pilot Name"]].values[0][0]
-                this_pilot_colour = pilot_df.loc[pilot_df["Pilot id"] == p, ["Colour"]].values[0][0]
-                pilot_lap = list(laps[laps["Pilot id"] == p]["Lap Time"])
+        long_rounds_i = max(range(len(rounds)), key = lambda i: len(rounds[i]))
+        max_rounds=len(rounds[long_rounds_i])
+
+        for j,r in enumerate(rounds[long_rounds_i]):
+            for i,h in enumerate(heats):
+               subtitles.append(f"H{h} - R{r}")
+        subtitles_str=tuple(subtitles)
+        #logger.info(subtitles_str)
+
+        fig = (make_subplots(rows=len(rounds[long_rounds_i]), cols=len(heats), subplot_titles=subtitles_str))
+        this_row=0
+
+        for rr, r in enumerate(rounds[long_rounds_i]):
+            for hh,h in enumerate(heats):
+                this_row+=1
+                laps = results_df.loc[(results_df["Heat"] == h) & (results_df["Round"] == r) ]
+                pilots_this_heat=list(set(laps["Pilot id"]))
+                yd = []
+                pilot_legend = []
+                pilot_legend_colours = []
+                for p in pilots_this_heat:
+                    this_pilot_name = pilot_df.loc[pilot_df["Pilot id"] == p, ["Pilot Name"]].values[0][0]
+                    this_pilot_colour = pilot_df.loc[pilot_df["Pilot id"] == p, ["Colour"]].values[0][0]
+                    pilot_lap = list(laps[laps["Pilot id"] == p]["Lap Time"])
+                    if DEBUG:
+                        logger.info(f"{p},{pilot_lap}")
+                    xd = [lapi for lapi in range(len(pilot_lap))]
+                    ycum = []
+                    pilot_legend.append(this_pilot_name)
+                    pilot_legend_colours.append(this_pilot_colour)
+                    for i in range(len(pilot_lap)):
+                        if i > 0:
+                            ycum.append(ycum[i - 1] + pilot_lap[i])
+                        else:
+                            ycum.append(pilot_lap[i])
+                    yd.append(ycum)
+
+                    # specific laptime labels on points
+                    #hovertemplate = "X: %{x}<br>Y: %{y}<br>Label: %{text}",
+                    #text = custom_labels  # Define the custom values to show in hover
+
+                    fig.add_trace(graph_objects.Scatter(x=xd, y=ycum, mode="lines+markers",
+                                                        name=this_pilot_name,
+                                                        line=dict(color=this_pilot_colour),
+                                                        marker=dict(
+                                                            size=15,  # Set marker size
+                                                            color=this_pilot_colour,  # Set marker color
+                                                            symbol='circle',  # Set marker shape
+                                                            opacity=0.8  # Set marker transparency
+                                                        )),
+                                  row=rr+1, col=hh+1,
+                                  )
+               #Plot delta plots
                 if DEBUG:
-                    logger.info(f"{p},{pilot_lap}")
-                xd = [lapi for lapi in range(len(pilot_lap))]
-                ycum = []
-                pilot_legend.append(this_pilot_name)
-                pilot_legend_colours.append(this_pilot_colour)
-                for i in range(len(pilot_lap)):
-                    if i > 0:
-                        ycum.append(ycum[i - 1] + pilot_lap[i])
-                    else:
-                        ycum.append(pilot_lap[i])
-                yd.append(ycum)
+                    logger.info(yd)
 
-                fig.add_trace(graph_objects.Scatter(x=xd, y=ycum, mode="lines+markers",
-                                                    name=this_pilot_name,
-                                                    line=dict(color=this_pilot_colour),
-                                                    marker=dict(
-                                                        size=15,  # Set marker size
-                                                        color=this_pilot_colour,  # Set marker color
-                                                        symbol='circle',  # Set marker shape
-                                                        opacity=0.8  # Set marker transparency
-                                                    )),
-                              row=this_row, col=1,
-                              )
-           #Plot delta plots
-            if DEBUG:
-                logger.info(yd)
+                delta_laps=[]
+                # need to check most laps complete
+                index_of_fastest = min(range(len(yd)), key=lambda i: yd[i][-1])
 
-            delta_laps=[]
-            # need to check most laps complete
-            index_of_fastest = min(range(len(yd)), key=lambda i: yd[i][-1])
+                if DEBUG:
+                    logger.info(f"Fastest pilot index is {index_of_fastest}")
 
-            if DEBUG:
-                logger.info(f"Fastest pilot index is {index_of_fastest}")
+        fig.update_layout(
+            template="plotly_dark",  # Dark mode
+            height=int(max_rounds*600),
+            showlegend=False,
+            title=f"{event_name} - Lap Times")
 
-            # for i,p in enumerate(pilots_this_heat):
-            #     pilot_lap = list(laps[laps["Pilot id"] == p]["Lap Time"])
-            #     this_pilot_name = pilot_df.loc[pilot_df["Pilot id"] == p, ["Pilot Name"]].values[0][0]
-            #     this_pilot_colour = pilot_df.loc[pilot_df["Pilot id"] == p, ["Colour"]].values[0][0]
-            #     this_delta_lap=[]
-            #     if i == index_of_fastest:
-            #         this_delta_lap= [0]*len(pilot_lap)
-            #     else:
-            #         for l in range(len(yd[i])):
-            #             this_delta_lap.append(yd[i][l]-yd[index_of_fastest][l])
-            #         delta_laps.append(this_delta_lap)
-            #         xd = [lapi for lapi in range(len(pilot_lap))]
-            #         fig.add_trace(graph_objects.Scatter(x=xd, y=this_delta_lap, mode="lines+markers",
-            #                                             name=this_pilot_name,
-            #                                             line=dict(dash='dash', color=this_pilot_colour),
-            #                                             marker=dict(
-            #                                                 size=15,  # Set marker size
-            #                                                 color=this_pilot_colour,  # Set marker color
-            #                                                 symbol='circle',  # Set marker shape
-            #                                                 opacity=0.8  # Set marker transparency
-            #                                             )),
-            #                       row=this_row + 1, col=2)
-            # logger.info(delta_laps)
-    #
-    fig.update_layout(
-        template="plotly_dark",  # Dark mode
-        height=2800,
-        showlegend=False,
-        title = f"{event_name} - Lap Times")
+        ## create pilot list for each heat and add a legend at the top
 
-    rhapi.ui.register_markdown(
-        "race_results_plot",
-        "Race Results",
-        fig.to_html(include_plotlyjs=PLOTLY_JS, full_html=False),
-    )
-    return fig.to_html(include_plotlyjs=PLOTLY_JS)
+        # fig.update_layout(
+        #     annotations=[
+        #         dict(text="Legend 1:<br>Line 1", x=0.2, y=1, xref="paper", yref="paper",
+        #              showarrow=False, font=dict(color="red", size=14)),
+        #         dict(text="Legend 2:<br>Line 2", x=0.8, y=1, xref="paper", yref="paper",
+        #              showarrow=False, font=dict(color="blue", size=14)),
+        #         dict(text="Legend 3:<br>Bar 1", x=0.2, y=0.1, xref="paper", yref="paper",
+        #              showarrow=False, font=dict(color="green", size=14)),
+        #         dict(text="Legend 4:<br>Bar 2", x=0.8, y=0.1, xref="paper", yref="paper",
+        #              showarrow=False, font=dict(color="purple", size=14)),
+        #     ]
+        # )
+
+        common_xaxis_settings = dict(
+            title="Lap",
+            showgrid=True,
+            dtick=1,
+            rangemode='tozero'
+        )
+        common_yaxis_settings = dict(
+            title="Time(s)"
+        )
+
+        for i in range(len(heats)*len(rounds[long_rounds_i])):
+            fig.update_layout(**{f"xaxis{i+1}": common_xaxis_settings, f"yaxis{i+1}":common_yaxis_settings})
+
+
+        rhapi.ui.register_markdown(
+            "race_results_plot",
+            "Race Results",
+            fig.to_html(include_plotlyjs=PLOTLY_JS, full_html=False),
+        )
+        return fig.to_html(include_plotlyjs=PLOTLY_JS)
+    else:
+        logger.info("No data to plot")
+        return "No data to plot"
 
 
 
@@ -398,12 +418,7 @@ def update_results(args: dict) -> None:
     if rhapi is not None:
         update_event_data({"rhapi": rhapi})
         update_event_plot(rhapi)
-
-def update_race_results(args: dict) -> None:
-    rhapi: Union[RHAPI, None] = args.get("rhapi", None)
-    if rhapi is not None:
-        update_event_data({"rhapi": rhapi})
-        update_event_plot(rhapi)
+        update_race_plots(rhapi)
 
 
 def init_plugin(args: dict) -> None:
@@ -430,7 +445,7 @@ def initialize(rhapi: RHAPI) -> None:
     # )
     # Link to the page
     rhapi.ui.register_markdown(
-        "event_results_plot", "Results Plot", "Plot available [here](/event_result)"
+        "event_results_plot", "Event Results Plot", "Plot available [here](/event_result)"
     )
 
     # Race Results Plot
@@ -444,7 +459,7 @@ def initialize(rhapi: RHAPI) -> None:
     # )
     # # Link to the page
     rhapi.ui.register_markdown(
-        "race_results_plot", "Results Plot", "Plot available [here](/race_results)"
+        "race_results_plot", "Race Results Plot", "Plot available [here](/race_results)"
     )
 
     bp1 = Blueprint(
