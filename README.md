@@ -3,27 +3,14 @@ This plugin to produces a statistical plot of the race event lap times per pilot
 
  
  ### Install
-** v0.2 Soon to be available as a custom-plugin through the RotorHazard Plugin Manager **
-For now use Release v0.1 !!!!! 
-Log in via SSH and then execute the following commands : 
+Install from Settings -> Plugins -> Browse Community Plugins -> Utilities -> Event Plots : Install
 
+On the Results page in RotorHazard you will see new sections
 
-```
-cd ~
-wget https://github.com/jrwrodgers/event_plots/archive/refs/tags/v0.1.zip
-unzip ./main.zip
-rm -r ~/RotorHazard/src/server/plugins/event_plots
-cp -r ~/event_plots-main ~/RotorHazard/src/server/plugins/event_plots
-rm -r ~/event_plots-main
-rm ./main.zip
-pip install -r ./RotorHazard/src/server/plugins/event_plots/requirements.txt
-sudo systemctl restart rotorhazard.service
-```
+![image](https://github.com/jrwrodgers/event_plots/blob/main/assets/Panels.png)
 
-On the Format page in RotorHazard you will see a Lap Time Stats section
-![image](https://github.com/jrwrodgers/event_plots/blob/main/assets/plugin.png)
-
-Everytime results are saved or resaved the results plot is updated and can be viewed on the link. The colours are linked to the pilot colours. The plot will look something like this:
+The Event Results Plot:
+The colours are linked to the pilot colours. The plot will look something like this:
 
 ![image](https://github.com/jrwrodgers/event_plots/blob/main/assets/event_plot.png)
 
@@ -36,5 +23,11 @@ Everytime results are saved or resaved the results plot is updated and can be vi
 
 The plots show the distribution of laptimes for any given pilot. The Box represents the interquartile range with a median line. More information on the what this style of plot can be seen here:
 [https://en.wikipedia.org/wiki/Box_plot](https://en.wikipedia.org/wiki/Box_plot)
+
+The Race Results Plots:
+The colours are linked to the pilot colours. The plot will look something like this, showing the cumulative race time for each pilot. This should give insight into the race pace and position for each pilot.
+
+![image](https://github.com/jrwrodgers/event_plots/blob/main/assets/race_results_plot.png)
+
 
 Happy flying and keep those lap times consistent! :)
