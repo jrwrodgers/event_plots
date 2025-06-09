@@ -7,5 +7,5 @@
     "documentation_uri": "https://github.com/jrwrodgers/event_plots",
     "required_rhapi_version": "1.2",
     "version": "1.0.1",
-    "dependencies" : ["plotly==6.0.0","pandas==2.2.3"],
+    "dependencies" : ["plotly==6.0.0","pandas==2.2.3"]
 }
