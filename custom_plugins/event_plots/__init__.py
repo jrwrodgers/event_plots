@@ -435,13 +435,13 @@ def update_results(args: dict) -> None:
         start_time = time.time()
         logger.info("Updating results data")
         update_event_data({"rhapi": rhapi})
-        logger.info(f"Results data updated in {time.time() - start_time} seconds")
+        logger.info(f"Results data updated in {time.time() - start_time:.3f} seconds")
         start_time = time.time()
         update_event_plot(rhapi)
-        logger.info(f"Stats plot updated in {time.time() - start_time} seconds")
+        logger.info(f"Stats plot updated in {time.time() - start_time:.3f} seconds")
         start_time = time.time()
         update_race_plots(rhapi)
-        logger.info(f"Race plot updated in {time.time() - start_time} seconds")
+        logger.info(f"Race plot updated in {time.time() - start_time:.3f} seconds")
 
 
 
@@ -455,22 +455,74 @@ def initialize(rhapi: RHAPI) -> None:
     # Event Startup populates the dataframes if restoring aa db
     rhapi.events.on(Evt.STARTUP, update_results, default_args={"rhapi": rhapi})
     # Event Laps_save and Laps_resave tp update the dataframes with latest results
-    rhapi.events.on(Evt.LAPS_SAVE, update_results, default_args={"rhapi": rhapi})
-    rhapi.events.on(Evt.LAPS_RESAVE, update_results, default_args={"rhapi": rhapi})
+    #rhapi.events.on(Evt.LAPS_SAVE, update_results, default_args={"rhapi": rhapi})
+    #rhapi.events.on(Evt.LAPS_RESAVE, update_results, default_args={"rhapi": rhapi})
     rhapi.events.on(Evt.DATABASE_RESTORE, update_results, default_args={"rhapi": rhapi})
+    rhapi.events.on(Evt.DATABASE_RESET, update_results, default_args={"rhapi": rhapi})
 
-    rhapi.ui.register_panel("event_plots_set", "Event Plots Settings", "settings")
+#     rhapi.ui.register_panel("event_plots_set", "Event Plots Settings", "settings")
+#
+# #    Plot Team laptimes plus stats
+# #    label the average
+#
+#     erow_height_field = UIField(
+#         name="event_plots_row_height",
+#         label="Stats Row Height",
+#         field_type=UIFieldType.NUMBER,
+#         desc=("This is the height of each row in the plots "),
+#         value=100)
+#     rhapi.fields.register_option(erow_height_field, "event_plots_set")
+#
+#     rrow_height_field = UIField(
+#         name="race_plots_row_height",
+#         label="Race Row Height",
+#         field_type=UIFieldType.NUMBER,
+#         desc=("This is the height of each row in the plots "),
+#         value=300)
+#     rhapi.fields.register_option(rrow_height_field, "event_plots_set")
 
-#    Plot Team laptimes plus stats
-#    label the average
+    # Event Results Plot
+    # rhapi.ui.register_panel("event_results_plot", "Event Results Plot", "results")
+    # rhapi.ui.register_quickbutton(
+    #      "event_plots_set",
+    #      "plot_data_update",
+    #      "Manual Plot Update",
+    #      update_results,
+    #      {"rhapi": rhapi},
+    # )
+    # # Link to the page
+    # rhapi.ui.register_markdown(
+    #     "event_results_plot", "Event Results Plot", "Plot available [here](/event_result)"
+    # )
 
+    # Race Results Plot
+    # rhapi.ui.register_panel("race_results_plot", "Race Results Plots", "results")
+    # # rhapi.ui.register_quickbutton(
+    # #     "race_results_plot",
+    # #     "plot_race_data_update",
+    # #     "Manual Plot Update",
+    # #     update_race_results,
+    # #     {"rhapi": rhapi},
+    # # )
+    # # # Link to the page
+    # rhapi.ui.register_markdown(
+    #     "race_results_plot", "Race Results Plot", "Plot available [here](/race_results)"
+    # )
+    rhapi.ui.register_panel("results_plot_settings", "Results Plots", "settings")
+    rhapi.ui.register_quickbutton(
+        "results_plot_settings",
+        "plot_race_data_update",
+        "Manual Plot Update",
+        update_results,
+        {"rhapi": rhapi},
+    )
     erow_height_field = UIField(
         name="event_plots_row_height",
         label="Stats Row Height",
         field_type=UIFieldType.NUMBER,
         desc=("This is the height of each row in the plots "),
         value=100)
-    rhapi.fields.register_option(erow_height_field, "event_plots_set")
+    rhapi.fields.register_option(erow_height_field, "results_plot_settings")
 
     rrow_height_field = UIField(
         name="race_plots_row_height",
@@ -478,35 +530,14 @@ def initialize(rhapi: RHAPI) -> None:
         field_type=UIFieldType.NUMBER,
         desc=("This is the height of each row in the plots "),
         value=300)
-    rhapi.fields.register_option(rrow_height_field, "event_plots_set")
+    rhapi.fields.register_option(rrow_height_field, "results_plot_settings")
 
-    # Event Results Plot
-    rhapi.ui.register_panel("event_results_plot", "Event Results Plot", "results")
-    rhapi.ui.register_quickbutton(
-         "event_plots_set",
-         "plot_data_update",
-         "Manual Plot Update",
-         update_results,
-         {"rhapi": rhapi},
-    )
-    # Link to the page
     rhapi.ui.register_markdown(
-        "event_results_plot", "Event Results Plot", "Plot available [here](/event_result)"
-    )
-
-    # Race Results Plot
-    rhapi.ui.register_panel("race_results_plot", "Race Results Plots", "results")
-    # rhapi.ui.register_quickbutton(
-    #     "race_results_plot",
-    #     "plot_race_data_update",
-    #     "Manual Plot Update",
-    #     update_race_results,
-    #     {"rhapi": rhapi},
-    # )
-    # # Link to the page
+        "results_plot_settings", "Event Results Plot", "Event Plot available [here](/event_result)"
+        )
     rhapi.ui.register_markdown(
-        "race_results_plot", "Race Results Plot", "Plot available [here](/race_results)"
-    )
+        "results_plot_settings", "Race Results Plots", "Race Plots available [here](/race_results)"
+        )
 
     bp1 = Blueprint(
             "event_plot",
@@ -514,8 +545,6 @@ def initialize(rhapi: RHAPI) -> None:
             static_folder="static",
             static_url_path="/event_plots/static",
         )
-
-
 
     #Call the plotly event plot to create html
     @bp1.route("/event_result")
