@@ -1,5 +1,6 @@
 from typing import Union
 import logging
+import time
 
 from flask import Blueprint
 
@@ -9,7 +10,6 @@ from Database import Pilot, SavedRaceLap
 from eventmanager import Evt
 
 import pandas as pd
-from itertools import product
 import plotly.graph_objects as graph_objects
 from plotly.subplots import make_subplots
 
@@ -63,13 +63,13 @@ def update_event_data(args: dict) -> None:
             for pilot in raceclass_results['by_consecutives']:
                 if pilot['laps'] > 0:
                     if  pilot['consecutives_source']['heat'] :
-                       round=int(pilot['consecutives_source']['round'])
-                       if round == 0:
-                          round = int(pilot['consecutives_source']['displayname'].split("/")[0].split(" ")[1])
+                       roundn=int(pilot['consecutives_source']['round'])
+                       if roundn == 0:
+                          roundn = int(pilot['consecutives_source']['displayname'].split("/")[0].split(" ")[1])
                     else :
-                       round=int(str(pilot['consecutives_source']['displayname']).split("/")[0].split(" ")[1])
+                       roundn=int(str(pilot['consecutives_source']['displayname']).split("/")[0].split(" ")[1])
                     table_df.loc[len(table_df)] = [int(pilot['pilot_id']),pilot['consecutives'],
-                                                    round,
+                                                    roundn,
                                                     pilot['consecutive_lap_start'],
                                                     pilot['consecutives_base']]
                 if pilot['laps'] == 0:
@@ -161,17 +161,9 @@ def update_event_plot(rhapi:RHAPI) -> str:
         ### Need to check laps and pilots exist before running?
         fig = graph_objects.Figure()
 
-        # get min and max rounds - idea was to use this as a variable to filter with slider. Not trivial with plotly,
-        # requires javascript functions to update the source. Possible future development
-        #min_round = min(results_df["Round"])
-        #max_round = max(results_df["Round"])
-        #logger.info(f"Min/Max rounds = {min_round},{max_round}")
-
         # Plot box, raw data, fastest 3, holeshots for each pilot in the results order.. slowest first
         for pilot_id in reversed(list(table_df["Pilot id"])):
-
             laps = results_df.loc[results_df["Pilot id"] == int(pilot_id)]
-
             this_pilot_name=pilot_df.loc[pilot_df["Pilot id"] == pilot_id, ["Pilot Name"]].values[0][0]
             this_pilot_colour=pilot_df.loc[pilot_df["Pilot id"] == pilot_id, ["Colour"]].values[0][0]
 
@@ -342,6 +334,21 @@ def update_race_plots(rhapi) -> str:
             yd = []
             pilot_legend = []
             pilot_legend_colours = []
+            average_laps = []
+            pilots_in_lap =[]
+            for p in pilots_this_heat:
+                pilot_lap = list(laps[laps["Pilot id"] == p]["Lap Time"])
+                for i in range(len(pilot_lap)):
+                    if len(average_laps) <= i:
+                        average_laps.append(0)
+                        pilots_in_lap.append(0)
+                    average_laps[i]+= pilot_lap[i]
+                    pilots_in_lap[i]+=1
+                #logger.info(f"Pilot {p} has {len(pilot_lap)} laps f{pilot_lap}")
+            #logger.info(f"{average_laps}, {pilots_in_lap}")
+            average_lap = [a / b for a, b in zip(average_laps, pilots_in_lap)]
+            #logger.info(f"{average_lap}")
+
             for p in pilots_this_heat:
                 this_pilot_name = pilot_df.loc[pilot_df["Pilot id"] == p, ["Pilot Name"]].values[0][0] 
                 this_pilot_colour = pilot_df.loc[pilot_df["Pilot id"] == p, ["Colour"]].values[0][0]
@@ -353,10 +360,10 @@ def update_race_plots(rhapi) -> str:
                 pilot_legend.append(this_pilot_name)
                 pilot_legend_colours.append(this_pilot_colour)
                 for i in range(len(pilot_lap)):
-                    if i > 0:
-                        ycum.append(ycum[i - 1] + pilot_lap[i])
+                    if i > 1:
+                        ycum.append(ycum[i - 1] + (pilot_lap[i]-average_lap[i]))
                     else:
-                        ycum.append(pilot_lap[i])
+                        ycum.append(pilot_lap[i]-average_lap[i])
                 yd.append(ycum)
 
                 # specific laptime labels on points
@@ -381,7 +388,7 @@ def update_race_plots(rhapi) -> str:
             delta_laps=[]
             # need to check most laps complete
             if len(yd) > 0:
-            	index_of_fastest = min(range(len(yd)), key=lambda i: yd[i][-1])
+                index_of_fastest = min(range(len(yd)), key=lambda i: yd[i][-1])
             else:
                 index_of_fastest = 99
             if DEBUG:
@@ -393,21 +400,6 @@ def update_race_plots(rhapi) -> str:
             showlegend=False,
             title=f"{event_name} - Lap Times")
 
-        ## create pilot list for each heat and add a legend at the top
-
-        # fig.update_layout(
-        #     annotations=[
-        #         dict(text="Legend 1:<br>Line 1", x=0.2, y=1, xref="paper", yref="paper",
-        #              showarrow=False, font=dict(color="red", size=14)),
-        #         dict(text="Legend 2:<br>Line 2", x=0.8, y=1, xref="paper", yref="paper",
-        #              showarrow=False, font=dict(color="blue", size=14)),
-        #         dict(text="Legend 3:<br>Bar 1", x=0.2, y=0.1, xref="paper", yref="paper",
-        #              showarrow=False, font=dict(color="green", size=14)),
-        #         dict(text="Legend 4:<br>Bar 2", x=0.8, y=0.1, xref="paper", yref="paper",
-        #              showarrow=False, font=dict(color="purple", size=14)),
-        #     ]
-        # )
-
         common_xaxis_settings = dict(
             title="Lap",
             showgrid=True,
@@ -415,7 +407,8 @@ def update_race_plots(rhapi) -> str:
             rangemode='tozero'
         )
         common_yaxis_settings = dict(
-            title="Time(s)"
+            autorange='reversed',
+            title="Delta Time(s)"
         )
 
         for i in range(len(sorted_unique_races)):
@@ -438,9 +431,18 @@ def update_race_plots(rhapi) -> str:
 def update_results(args: dict) -> None:
     rhapi: Union[RHAPI, None] = args.get("rhapi", None)
     if rhapi is not None:
+
+        start_time = time.time()
+        logger.info("Updating results data")
         update_event_data({"rhapi": rhapi})
+        logger.info(f"Results data updated in {time.time() - start_time} seconds")
+        start_time = time.time()
         update_event_plot(rhapi)
+        logger.info(f"Stats plot updated in {time.time() - start_time} seconds")
+        start_time = time.time()
         update_race_plots(rhapi)
+        logger.info(f"Race plot updated in {time.time() - start_time} seconds")
+
 
 
 def init_plugin(args: dict) -> None:
@@ -464,7 +466,7 @@ def initialize(rhapi: RHAPI) -> None:
 
     erow_height_field = UIField(
         name="event_plots_row_height",
-        label="Row Height",
+        label="Stats Row Height",
         field_type=UIFieldType.NUMBER,
         desc=("This is the height of each row in the plots "),
         value=100)
@@ -472,7 +474,7 @@ def initialize(rhapi: RHAPI) -> None:
 
     rrow_height_field = UIField(
         name="race_plots_row_height",
-        label="Row Height",
+        label="Race Row Height",
         field_type=UIFieldType.NUMBER,
         desc=("This is the height of each row in the plots "),
         value=300)
