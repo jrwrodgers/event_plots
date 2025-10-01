@@ -6,6 +6,6 @@
     "description": "Event lap time plots generated with Plotly",
     "documentation_uri": "https://github.com/jrwrodgers/event_plots",
     "required_rhapi_version": "1.2",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "dependencies" : ["plotly==6.0.0","pandas==2.2.3"]
 }
