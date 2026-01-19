@@ -32,10 +32,5 @@ The colours are linked to the pilot colours. The plot will look something like t
 The plots show the distribution of laptimes for any given pilot. The Box represents the interquartile range with a median line. More information on the what this style of plot can be seen here:
 [https://en.wikipedia.org/wiki/Box_plot](https://en.wikipedia.org/wiki/Box_plot)
 
-The Race Results Plots:
-The colours are linked to the pilot colours. The plot will look something like this, showing the cumulative race time for each pilot. This should give insight into the race pace and position for each pilot.
-
-![image](https://github.com/jrwrodgers/event_plots/blob/main/assets/race_results_plot.png)
-
 
 Happy flying and keep those lap times consistent! :)
