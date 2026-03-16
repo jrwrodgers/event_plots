@@ -1061,7 +1061,19 @@ class EventPlotsGenerator:
             # Check if we have any races
             if len(self.rhapi.db.races) == 0:
                 raceclass_name = getattr(raceclass, 'name', 'Unknown')
-                return f"<html><body><h2>No race data available</h2><p>No races have been completed yet for class '{raceclass_name}'.</p><p><a href='/event_result'>Back to class list</a></p></body></html>"
+                # If only one class exists we likely came from settings, not a class list
+                try:
+                    raceclasses = self.rhapi.db.raceclasses
+                    back_href = "/settings" if len(raceclasses) <= 1 else "/event_result"
+                except Exception:
+                    back_href = "/event_result"
+                return (
+                    "<html><body>"
+                    f"<h2>No race data available</h2>"
+                    f"<p>No races have been completed yet for class '{raceclass_name}'.</p>"
+                    f"<p><a href='{back_href}'>Back</a></p>"
+                    "</body></html>"
+                )
             
             # Get event name
             try:
@@ -1169,7 +1181,18 @@ class EventPlotsGenerator:
             lap_df = self._extract_lap_data(raceclass, win_condition, pilot_df, consecutive_df, consecutive_laps_base)
             if len(lap_df) == 0:
                 raceclass_name = getattr(raceclass, 'name', 'Unknown')
-                return f"<html><body><h2>No lap data available</h2><p>No lap data found for class '{raceclass_name}'. Ensure races have been completed with lap times recorded.</p><p><a href='/event_result'>Back to class list</a></p></body></html>"
+                try:
+                    raceclasses = self.rhapi.db.raceclasses
+                    back_href = "/settings" if len(raceclasses) <= 1 else "/event_result"
+                except Exception:
+                    back_href = "/event_result"
+                return (
+                    "<html><body>"
+                    f"<h2>No lap data available</h2>"
+                    f"<p>No lap data found for class '{raceclass_name}'. Ensure races have been completed with lap times recorded.</p>"
+                    f"<p><a href='{back_href}'>Back to class list</a></p>"
+                    "</body></html>"
+                )
             
             # Generate plot based on win condition
             return self._generate_plot(pilot_df, lap_df, win_condition, event_name, raceformat_name, raceclass_name, consecutive_df, consecutive_laps_base)
