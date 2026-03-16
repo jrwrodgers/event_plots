@@ -60,6 +60,15 @@ def initialize(rhapi: RHAPI) -> None:
         value=100
     )
     rhapi.fields.register_option(erow_height_field, "results_plot_settings")
+
+    erow_width_field = UIField(
+        name="event_plots_row_width",
+        label="Max Lap time (s)",
+        field_type=UIFieldType.NUMBER,
+        desc=("This is the max time on the plots"),
+        value=100
+    )
+    rhapi.fields.register_option(erow_width_field, "results_plot_settings")
     
     # Register markdown links
     rhapi.ui.register_markdown(

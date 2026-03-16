@@ -19,6 +19,7 @@ try:
 except ImportError:
     DEBUG = False
 
+
 PLOTLY_JS = "/event_plots/static/plotly-3.0.0.min.js"
 logger = logging.getLogger(__name__)
 
@@ -339,6 +340,27 @@ class EventPlotsGenerator:
             if raceclass_results and 'by_consecutives' in raceclass_results:
                 for pilot in raceclass_results['by_consecutives']:
                     pilot_id = int(pilot['pilot_id'])
+
+                    # Extra debug info to understand how RotorHazard encodes consecutives
+                    if DEBUG:
+                        try:
+                            cs = pilot.get('consecutives_source', {}) or {}
+                            logger.warning(
+                                "[Consec DEBUG] raw pilot entry: id=%s, callsign=%s, laps=%s, consecutives=%s, "
+                                "consecutives_base=%s, consecutive_lap_start=%s, source_round=%s, source_displayname=%s",
+                                pilot_id,
+                                pilot.get('callsign', pilot.get('name', 'unknown')),
+                                pilot.get('laps'),
+                                pilot.get('consecutives'),
+                                pilot.get('consecutives_base'),
+                                pilot.get('consecutive_lap_start'),
+                                cs.get('round'),
+                                cs.get('displayname'),
+                            )
+                        except Exception:
+                            # Don't let debug logging break extraction
+                            pass
+
                     if pilot['laps'] > 0:
                         # Extract round number with improved error handling
                         roundn = 0
@@ -574,16 +596,15 @@ class EventPlotsGenerator:
                 pilot_name = pilot_names[pilot_id_to_index[pilot_id]]
                 
                 # Get consecutive data for this pilot if available (win_condition 4)
-                best_q_round = None
-                best_q_start_lap = None
+                best_q_total_time = None
                 best_q_nlaps = None
                 if win_condition == 4 and consecutive_df is not None and len(consecutive_df) > 0:
-                    if round_col in consecutive_df.columns and lap_col in consecutive_df.columns and nlaps_col in consecutive_df.columns:
-                        pilot_consecutive = consecutive_df[consecutive_df["Pilot id"] == pilot_id]
-                        if len(pilot_consecutive) > 0:
-                            best_q_round = pilot_consecutive[round_col].values[0]
-                            best_q_start_lap = pilot_consecutive[lap_col].values[0]
-                            best_q_nlaps = pilot_consecutive[nlaps_col].values[0]
+                    pilot_consecutive = consecutive_df[consecutive_df["Pilot id"] == pilot_id]
+                    if len(pilot_consecutive) > 0:
+                        # Use the total time and nLaps only; we will locate the matching window ourselves
+                        time_col = f"Best {consecutive_laps_base} Consecutive Lap Time"
+                        best_q_total_time = float(pilot_consecutive[time_col].values[0])
+                        best_q_nlaps = int(pilot_consecutive[nlaps_col].values[0])
                 
                 # Process each run (round)
                 for round_idx, run_id in enumerate(run_ids):
@@ -598,6 +619,43 @@ class EventPlotsGenerator:
                     actual_round = self._get_round_number(laps[0], run_id)
                     if actual_round == 0:
                         actual_round = round_idx + 1  # Fallback to 1-indexed position
+
+                    # For win_condition 4, determine which laps in this run form the best consecutive window
+                    best_q_indices_for_run = set()
+                    if (win_condition == 4 and best_q_total_time is not None and
+                        best_q_nlaps is not None and best_q_nlaps > 0):
+                        try:
+                            # Build list of regular laps (exclude holeshot and deleted)
+                            regular_laps = []
+                            for lap_idx, lap in enumerate(laps):
+                                if lap.deleted != 0 or lap_idx == 0:
+                                    continue
+                                lap_time_seconds = self._parse_lap_time(lap.lap_time_formatted)
+                                regular_laps.append((lap_idx, lap_time_seconds))
+
+                            # Slide a window of size best_q_nlaps and look for a sum matching best_q_total_time
+                            eps = 0.01  # tolerance in seconds to account for formatting/rounding
+                            for start in range(0, max(0, len(regular_laps) - best_q_nlaps + 1)):
+                                window = regular_laps[start:start + best_q_nlaps]
+                                window_time = sum(t for _, t in window)
+                                if abs(window_time - best_q_total_time) <= eps:
+                                    best_q_indices_for_run = {idx for idx, _ in window}
+                                    if DEBUG:
+                                        logger.warning(
+                                            "[BestConsec MATCH DEBUG] Pilot %s (id=%s): pilotrun_id=%s, "
+                                            "round=%s, heat_id=%s, nLaps=%s, total=%.3fs, indices=%s",
+                                            pilot_name,
+                                            pilot_id,
+                                            run_id,
+                                            actual_round,
+                                            heat_id,
+                                            best_q_nlaps,
+                                            best_q_total_time,
+                                            sorted(best_q_indices_for_run),
+                                        )
+                                    break
+                        except Exception as e:
+                            logger.warning(f"Error matching best consecutive window for pilot {pilot_name} (id={pilot_id}): {e}", exc_info=True)
                     
                     # Process each lap
                     for lap_idx, lap in enumerate(laps):
@@ -607,26 +665,7 @@ class EventPlotsGenerator:
                         lap_time_seconds = self._parse_lap_time(lap.lap_time_formatted)
                         
                         # Determine if this is a "Best Q" lap (for win_condition 4 - fastest consecutive)
-                        # IMPORTANT: Never include holeshot (lap 0) in consecutive lap calculations
-                        best_q = 0
-                        if win_condition == 4 and best_q_round is not None:
-                            if actual_round == best_q_round:  # Use actual round number
-                                if best_q_start_lap is not None and best_q_nlaps is not None:
-                                    # Exclude holeshot (lap_idx == 0) from consecutive calculations
-                                    if lap_idx > 0:  # Skip holeshot
-                                        # Adjust start_lap: if RotorHazard reports start_lap as 0 (holeshot),
-                                        # we need to start from lap 1 instead. Otherwise use the reported value.
-                                        if best_q_start_lap == 0:
-                                            # RotorHazard included holeshot, so we start from lap 1
-                                            adjusted_start_lap = 1
-                                        else:
-                                            # RotorHazard already excluded holeshot, use as-is
-                                            adjusted_start_lap = best_q_start_lap
-                                        
-                                        # Check if this lap is within the consecutive range
-                                        if (lap_idx >= adjusted_start_lap and 
-                                            lap_idx < adjusted_start_lap + best_q_nlaps):
-                                            best_q = 1
+                        best_q = 1 if (win_condition == 4 and lap_idx in best_q_indices_for_run) else 0
                         
                         # Fastest lap flag will be set after all laps are collected (for win_condition 3)
                         lap_data.append({
@@ -658,7 +697,37 @@ class EventPlotsGenerator:
                 # Create a mask for fastest laps
                 fastest_mask = regular_laps_mask & df["Pilot id"].map(pilot_fastest_times).eq(df["Lap Time"])
                 df.loc[fastest_mask, "Fastest Lap"] = 1
-        
+
+        # Debug output for fastest consecutive laps (win_condition 4)
+        if DEBUG and win_condition == 4 and len(df) > 0:
+            try:
+                for pilot_id in sorted(df["Pilot id"].unique()):
+                    pilot_rows = df[df["Pilot id"] == pilot_id]
+                    pilot_name = pilot_rows["Pilot Name"].iloc[0] if len(pilot_rows) > 0 else f"Pilot {pilot_id}"
+
+                    best_q_rows = pilot_rows[pilot_rows["Best Q"] == 1]
+                    if len(best_q_rows) == 0:
+                        logger.warning(f"[BestConsec DEBUG] Pilot {pilot_name} (id={pilot_id}) has no Best Q laps marked")
+                        continue
+
+                    # There should be a single round/heat for the best consecutives, but log all just in case
+                    rounds = sorted(best_q_rows["Round"].unique().tolist())
+                    heats = sorted(best_q_rows["Heat"].unique().tolist())
+                    laps_info = [
+                        f"(lap_idx={int(row['Lap'])}, time={row['Lap Time']:.3f}s)"
+                        for _, row in best_q_rows.sort_values("Lap").iterrows()
+                    ]
+                    logger.warning(
+                        "[BestConsec DEBUG] Pilot %s (id=%s): rounds=%s, heats=%s, best_consecutive_laps=%s",
+                        pilot_name,
+                        pilot_id,
+                        rounds,
+                        heats,
+                        ", ".join(laps_info),
+                    )
+            except Exception as e:
+                logger.warning(f"Error generating BestConsec DEBUG output: {e}", exc_info=True)
+
         return df
     
     def _generate_plot(self, pilot_df: pd.DataFrame, lap_df: pd.DataFrame, 
@@ -888,6 +957,14 @@ class EventPlotsGenerator:
             row_height = int(self.rhapi.db.option("event_plots_row_height", 100))
         except (ValueError, TypeError):
             row_height = 100
+
+        # Get max lap time (x-axis upper bound) from settings
+        try:
+            max_lap_time = float(self.rhapi.db.option("event_plots_row_width", 0))
+            if max_lap_time <= 0:
+                max_lap_time = None
+        except (ValueError, TypeError):
+            max_lap_time = None
         
         # Set title based on win condition
         if win_condition == 4:
@@ -920,7 +997,8 @@ class EventPlotsGenerator:
                 rangemode='tozero',
                 showgrid=True,
                 gridcolor='rgba(211,211,211,0.2)',
-                gridwidth=0.5
+                gridwidth=0.5,
+                range=[0, max_lap_time] if max_lap_time is not None else None,
             ),
             yaxis=dict(
                 tickmode="array",
