@@ -7,13 +7,13 @@ Install from RH Settings -> Plugins -> Browse Community Plugins -> Utilities -> 
 
 ### Settings
 On the Results page in RotorHazard you will see new sections
-![image](https://github.com/jrwrodgers/event_plots/blob/main/assets/settings.png)
+![image](https://github.com/jrwrodgers/event_plots/blob/main/assets/settings.jpg)
 
 The Stats row height changes the height of each pilot row - for fewer pilots you may wish to increase this. For more pilots reduce this.
 The Max Lap time(s) sets the width of the plot to trim any large lap times
 
 If you have multiple classes the link will lead to a webpage to select the class you wish to plot:
-![image](https://github.com/jrwrodgers/event_plots/blob/main/assets/plot_selection.png)
+![image](https://github.com/jrwrodgers/event_plots/blob/main/assets/Plot_selection.jpg)
 
 If you want to go straight to the link then use /event_plots/1 or /event_plots/2 etc..
 
