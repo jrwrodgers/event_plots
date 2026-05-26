@@ -144,6 +144,23 @@ class EventPlotsGenerator:
         except (ValueError, AttributeError) as e:
             logger.warning(f"Error parsing lap time '{lap_time_formatted}': {e}")
             return 0.0
+
+    def _is_lap_deleted(self, lap) -> bool:
+        """Return True if RotorHazard excludes this lap from results."""
+        return bool(getattr(lap, "deleted", False))
+
+    def _iter_counted_laps(self, laps):
+        """Yield (lap, lap_number) for laps counted in results.
+
+        lap_number 0 is the holeshot; 1+ are race laps. Deleted laps are omitted.
+        Matches RotorHazard's lap_number assignment for saved laps.
+        """
+        lap_number = 0
+        for lap in laps:
+            if self._is_lap_deleted(lap):
+                continue
+            yield lap, lap_number
+            lap_number += 1
     
     def _get_race_heat_id(self, lap) -> int:
         """Get heat_id from lap, using cache to avoid repeated API calls.
@@ -627,11 +644,11 @@ class EventPlotsGenerator:
                         try:
                             # Build list of regular laps (exclude holeshot and deleted)
                             regular_laps = []
-                            for lap_idx, lap in enumerate(laps):
-                                if lap.deleted != 0 or lap_idx == 0:
+                            for lap, lap_number in self._iter_counted_laps(laps):
+                                if lap_number == 0:
                                     continue
                                 lap_time_seconds = self._parse_lap_time(lap.lap_time_formatted)
-                                regular_laps.append((lap_idx, lap_time_seconds))
+                                regular_laps.append((lap_number, lap_time_seconds))
 
                             # Slide a window of size best_q_nlaps and look for a sum matching best_q_total_time
                             eps = 0.01  # tolerance in seconds to account for formatting/rounding
@@ -639,11 +656,11 @@ class EventPlotsGenerator:
                                 window = regular_laps[start:start + best_q_nlaps]
                                 window_time = sum(t for _, t in window)
                                 if abs(window_time - best_q_total_time) <= eps:
-                                    best_q_indices_for_run = {idx for idx, _ in window}
+                                    best_q_indices_for_run = {lap_num for lap_num, _ in window}
                                     if DEBUG:
                                         logger.warning(
                                             "[BestConsec MATCH DEBUG] Pilot %s (id=%s): pilotrun_id=%s, "
-                                            "round=%s, heat_id=%s, nLaps=%s, total=%.3fs, indices=%s",
+                                            "round=%s, heat_id=%s, nLaps=%s, total=%.3fs, lap_numbers=%s",
                                             pilot_name,
                                             pilot_id,
                                             run_id,
@@ -657,15 +674,12 @@ class EventPlotsGenerator:
                         except Exception as e:
                             logger.warning(f"Error matching best consecutive window for pilot {pilot_name} (id={pilot_id}): {e}", exc_info=True)
                     
-                    # Process each lap
-                    for lap_idx, lap in enumerate(laps):
-                        if lap.deleted != 0:
-                            continue
-                        
+                    # Process each counted lap (lap_number matches RotorHazard: 0=holeshot, 1+=race laps)
+                    for lap, lap_number in self._iter_counted_laps(laps):
                         lap_time_seconds = self._parse_lap_time(lap.lap_time_formatted)
                         
                         # Determine if this is a "Best Q" lap (for win_condition 4 - fastest consecutive)
-                        best_q = 1 if (win_condition == 4 and lap_idx in best_q_indices_for_run) else 0
+                        best_q = 1 if (win_condition == 4 and lap_number in best_q_indices_for_run) else 0
                         
                         # Fastest lap flag will be set after all laps are collected (for win_condition 3)
                         lap_data.append({
@@ -674,7 +688,7 @@ class EventPlotsGenerator:
                             "Heat": heat_id,
                             "Lap Time": lap_time_seconds,
                             "Round": actual_round,
-                            "Lap": lap_idx,
+                            "Lap": lap_number,
                             "Best Q": best_q,
                             "Fastest Lap": 0,  # Will be set below
                             "Heat Color": heat_id
@@ -714,7 +728,7 @@ class EventPlotsGenerator:
                     rounds = sorted(best_q_rows["Round"].unique().tolist())
                     heats = sorted(best_q_rows["Heat"].unique().tolist())
                     laps_info = [
-                        f"(lap_idx={int(row['Lap'])}, time={row['Lap Time']:.3f}s)"
+                        f"(lap_num={int(row['Lap'])}, time={row['Lap Time']:.3f}s)"
                         for _, row in best_q_rows.sort_values("Lap").iterrows()
                     ]
                     logger.warning(
